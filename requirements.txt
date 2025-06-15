@@ -1,0 +1,15 @@
+# Core dependencies for MSTR prediction system
+pandas>=1.5.0
+numpy>=1.21.0
+openpyxl>=3.0.0
+
+# Advanced financial analysis (optional)
+arch>=5.0.0          # GARCH volatility modeling
+scipy>=1.7.0         # Statistical functions
+scikit-learn>=1.0.0  # Machine learning utilities
+
+# Development tools (optional)
+pytest>=6.0.0        # Testing framework
+flake8>=4.0.0        # Code linting  
+black>=22.0.0        # Code formatting
+mypy>=0.910          # Type checking

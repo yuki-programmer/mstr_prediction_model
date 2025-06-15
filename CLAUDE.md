@@ -1,70 +1,145 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # MSTR株価予測システム
 
-## 目的
-マイクロストラテジー(MSTR)の将来の株価動向を予測して投資判断に役立てる
+## プロジェクト概要
 
-## 概要
-- **対象**: MicroStrategy Inc. (NASDAQ: MSTR) 株価予測
-- **予測期間**: 5段階の時間軸（7日、14日、30日、90日、180日）
-- **核心技術**: パターン一致ラグ相関分析（独自開発アルゴリズム）
-- **データソース**: BTC、MSTR、Gold のヒストリカルデータ
-- **アーキテクチャ**: モジュラー設計による拡張可能なシステム
+マイクロストラテジー(MSTR)株価を予測する金融分析システム。BTCとの相関パターンを独自アルゴリズムで分析し、5段階の時間軸（7日〜180日）で投資判断を支援する。
 
-## 重要な開発指針
+**核心技術**: パターン一致ラグ相関分析（BTC-MSTR間の時間差を動的に検出）
 
-### 必須参照ファイル
-実装前に以下を必ず確認してください：
-- `.claude/context.md` - プロジェクトの詳細情報、制約条件、ドメイン知識
+## 開発環境・ツール
 
-### 核心アルゴリズム
-**パターン一致ラグ相関分析**が本システムの中核です：
-- BTCとMSTRの価格動向パターンを分析
-- 最適なラグ（時間差）を動的に検出
-- 複数期間での整合性を検証
+```bash
+# 必要な依存関係インストール
+pip install -r requirements.txt
 
-### アーキテクチャ原則
-1. **モジュラー設計**: 各機能を独立したモジュールに分離
-2. **設定駆動**: パラメータは設定ファイルで管理
-3. **テスト可能性**: 全モジュールにテストコードを実装
-4. **拡張性**: 新しい分析手法や期間を容易に追加可能
+# 開発・テスト用コマンド（モジュール単体実行）
+python3 data/loader.py            # データローダー単体テスト
+python3 data/preprocessor.py      # データ前処理器単体テスト  
+python3 config/system_config.py   # システム設定検証
+python3 utils/volume_converter.py # ボリューム変換ユーティリティテスト
 
-## 開発ルール
+# 開発ツール（実装後に利用可能）
+python3 -m pytest tests/           # テスト実行
+python3 -m pytest tests/test_specific.py::test_function  # 単体テスト実行
+python3 -m flake8 .               # リンタ実行
+python3 -m black .                # コードフォーマット
+python3 -m mypy .                 # 型チェック
 
-### コード品質
-- 型ヒント (Type Hints) を必ず使用
-- docstring で関数・クラスの説明を記載
-- PEP 8 準拠のコードスタイル
+# システム実行（実装後）
+python3 main.py                   # メイン予測システム実行
+```
 
-### ファイル構成
-プロジェクト構成図（PDFファイル参照）に従って実装：
+## アーキテクチャ
+
+### モジュール構成
 ```
 mstr_prediction_system/
-├── config/          # 設定管理
-├── data/           # データ処理
-├── analysis/       # 分析エンジン
-├── prediction/     # 予測モデル
-├── decision/       # 投資判断
-├── visualization/  # 可視化
-└── utils/          # ユーティリティ
+├── config/          # システム設定・パラメータ管理
+├── data/           # データ処理（Excel読込、前処理、API連携）  
+├── analysis/       # パターン分析・相関分析・整合性チェック
+├── prediction/     # BTC物理予測・MSTR複数期間予測
+├── decision/       # 投資判断・要因分析
+├── visualization/  # ダッシュボード・チャート・レポート
+└── utils/          # 共通ユーティリティ
 ```
 
-### 実装順序の推奨
-1. データ処理基盤 (`data/`)
-2. 基本分析機能 (`analysis/`)
-3. 予測エンジン (`prediction/`)
-4. 投資判断ロジック (`decision/`)
-5. 可視化・レポート (`visualization/`)
+### データフロー
+1. **データ取得**: Excel→ProcessedDataContainer (BTC/MSTR/Gold)
+2. **パターン分析**: 方向性変換→パターンマッチング→最適ラグ検出
+3. **予測エンジン**: BTC物理予測→MSTR予測（5期間）
+4. **投資判断**: 複数予測結果の統合→最終判断
 
-## 金融ドメインの特殊事項
-- **MSTR特性**: ビットコイン大量保有企業としての特殊な価格連動性
-- **ボラティリティ**: 暗号通貨関連銘柄の高いボラティリティを考慮
-- **市場時間**: 株式市場の取引時間制約
-- **リスク管理**: 予測の不確実性を常に考慮
+## 重要な設計原則
 
-## 注意事項
-- 本システムは投資判断の補助ツールであり、投資助言ではありません
-- 過去のデータに基づく予測であり、将来の結果を保証するものではありません
-- リスク管理を最優先に開発してください
+### データスキーマ準拠
+- 実装前に `.claude/data_schemas/` の該当ファイルを必ず確認
+- 全DataFrame操作は共通型定義（`common_types.md`）に準拠
+- モジュール間データ受け渡しは定義済みスキーマに厳密従う
 
----
-**開発開始前に `.claude/context.md` の内容を必ず確認してください**
+### コード品質基準
+- 型ヒント必須（Type Hints）
+- docstring記載必須
+- PEP 8準拠
+- モジュラー設計（機能独立性）
+- 設定駆動（パラメータ外部化）
+
+### 金融ドメイン特性
+- **MSTR特性**: ビットコイン大量保有企業の特殊相関
+- **ボラティリティ**: 暗号通貨関連銘柄の高変動性
+- **リスク管理**: 予測不確実性の明示的考慮
+- **免責**: 投資助言ではなく判断支援ツールの位置づけ
+
+## 開発ガイドライン
+
+### 実装順序
+1. `data/` - データ基盤構築
+2. `analysis/` - 分析エンジン  
+3. `prediction/` - 予測モデル
+4. `decision/` - 投資判断
+5. `visualization/` - 可視化
+
+### 必須参照ドキュメント
+- `.claude/context.md` - 詳細仕様・制約条件・ドメイン知識
+- `.claude/data_schemas/README.md` - データスキーマ設計全体像
+- 各モジュール実装時は対応するスキーマファイルを参照
+
+### エラーハンドリング
+- カスタム例外使用：`DataSchemaError`, `DataQualityError`, `DataConsistencyError`
+- データ品質チェック必須
+- 予測結果の整合性検証
+
+## プロジェクト状態
+
+**現在のフェーズ**: 基盤実装段階
+- アーキテクチャ設計完了
+- データスキーマ定義完了（`.claude/data_schemas/`）
+- 基本モジュール実装済み:
+  - `data/loader.py` - Excelデータ読み込み機能
+  - `data/preprocessor.py` - データ前処理パイプライン
+  - `config/system_config.py` - システム設定管理
+  - `utils/volume_converter.py` - ボリューム変換ユーティリティ
+  - `analysis/pattern_analysis/direction_converter.py` - **新規完成**: GARCH統合型方向性変換
+
+**次のステップ**: 
+1. `analysis/pattern_analysis/pattern_matcher.py` の実装
+2. `analysis/pattern_analysis/optimal_lag_finder.py` の実装
+3. `analysis/pattern_analysis/multi_period_analyzer.py` の実装
+4. テストファイルの作成
+
+## 実装済みモジュール詳細
+
+### データ処理基盤（`data/`）
+- **loader.py**: Excel形式の日本語データシート読み込み、RawDataContainer出力
+  - 日付の自動変換（Excel serialからTimestamp）、列名の日英マッピング処理
+  - BTC/MSTR/Gold各ファイルの統合読み込み、データ整合性検証機能
+- **preprocessor.py**: 生データ清浄化、ProcessedDataContainer出力
+  - OHLCV制約検証、ボリューム数値変換、データ品質レポート生成
+
+### 設定管理（`config/`）
+- **system_config.py**: 包括的設定管理クラス（SystemConfig）
+  - 5期間予測パラメータ、BTC-MSTR相関設定、投資リスクプロファイル
+  - 環境変数オーバーライド、バリデーション機能、ログ設定
+
+### ユーティリティ（`utils/`）
+- **volume_converter.py**: "0.10K"→100.0等のボリューム文字列数値変換
+
+### パターン分析（`analysis/pattern_analysis/`）
+- **direction_converter.py**: 高度なGARCH統合型方向性変換モジュール
+  - EMA/SMAトレンド分析、GARCHボラティリティ予測、DFAによるHurst指数計算
+  - 動的閾値による方向性判定、高次パターンシーケンス生成
+  - 包括的品質評価機能、graceful degradation対応
+
+## コア設計パターン
+
+### データフロー制約
+- 全DataFrame操作でDatetimeIndex必須、OHLCV列構造厳守
+- RawDataContainer→ProcessedDataContainer の変換フロー
+- 各モジュールは独立実行可能（__main__でバリデーション関数実行）
+
+### エラーハンドリング戦略
+- pandas未インストール時のMock実装によるgraceful degradation
+- データ品質不備時の詳細ログ出力とpartial success対応
