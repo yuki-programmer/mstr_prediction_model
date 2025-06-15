@@ -238,8 +238,8 @@ def process_single_asset(df: pd.DataFrame, asset_name: str) -> pd.DataFrame:
     logger.info(f"Handling missing values for {asset_name}")
     initial_rows = len(processed_df)
     
-    # Forward fill then backward fill
-    processed_df = processed_df.fillna(method='ffill').fillna(method='bfill')
+    # Forward fill then backward fill (pandas 2.0+ compatible)
+    processed_df = processed_df.ffill().bfill()
     
     # Remove any remaining missing values
     processed_df = processed_df.dropna()

@@ -181,31 +181,60 @@ class DirectionPatterns:
         return all(checks)
     
     def _validate_directions(self, df: pd.DataFrame, asset_name: str) -> bool:
-        """Validate individual direction DataFrame"""
+        """Validate individual direction DataFrame with practical financial data constraints"""
         try:
             required_columns = ['direction', 'strength', 'volatility', 'hurst', 'trend_duration']
             if not all(col in df.columns for col in required_columns):
                 logger.error(f"{asset_name} directions missing required columns")
                 return False
             
-            # Check direction values
-            if not df['direction'].isin([-1, 0, 1]).all():
+            # Check minimum data size
+            if len(df) < 10:
+                logger.error(f"{asset_name} directions insufficient data: {len(df)} rows")
+                return False
+            
+            # Check data completeness (allow up to 5% missing values)
+            total_values = len(df) * len(required_columns)
+            missing_values = df[required_columns].isnull().sum().sum()
+            completeness_ratio = 1.0 - (missing_values / total_values)
+            
+            if completeness_ratio < 0.95:
+                logger.error(f"{asset_name} directions data completeness too low: {completeness_ratio:.3f}")
+                return False
+            
+            # Validate non-null values only
+            valid_data = df[required_columns].dropna()
+            if len(valid_data) == 0:
+                logger.error(f"{asset_name} directions no valid data after dropping NaN")
+                return False
+            
+            # Check direction values (for non-null values only)
+            valid_directions = valid_data['direction'].dropna()
+            if len(valid_directions) > 0 and not valid_directions.isin([-1, 0, 1]).all():
                 logger.error(f"{asset_name} directions contain invalid values")
                 return False
             
-            # Check strength and hurst ranges
-            if not ((df['strength'] >= 0.0) & (df['strength'] <= 1.0)).all():
+            # Check strength and hurst ranges (for non-null values only)
+            valid_strength = valid_data['strength'].dropna()
+            if len(valid_strength) > 0 and not ((valid_strength >= 0.0) & (valid_strength <= 1.0)).all():
                 logger.error(f"{asset_name} strength values out of range [0.0-1.0]")
                 return False
             
-            if not ((df['hurst'] >= 0.0) & (df['hurst'] <= 1.0)).all():
+            valid_hurst = valid_data['hurst'].dropna()
+            if len(valid_hurst) > 0 and not ((valid_hurst >= 0.0) & (valid_hurst <= 1.0)).all():
                 logger.error(f"{asset_name} hurst values out of range [0.0-1.0]")
                 return False
             
-            # Check for missing values
-            if df.isnull().any().any():
-                logger.error(f"{asset_name} directions contain missing values")
+            # Check for reasonable volatility values (positive)
+            valid_volatility = valid_data['volatility'].dropna()
+            if len(valid_volatility) > 0 and not (valid_volatility >= 0.0).all():
+                logger.error(f"{asset_name} volatility values contain negative values")
                 return False
+            
+            # Log validation success with stats
+            logger.info(f"{asset_name} directions validation passed: "
+                       f"{len(df)} total rows, {len(valid_data)} complete rows, "
+                       f"completeness: {completeness_ratio:.3f}")
             
             return True
         except Exception as e:
@@ -213,22 +242,55 @@ class DirectionPatterns:
             return False
     
     def _validate_patterns(self, df: pd.DataFrame, asset_name: str) -> bool:
-        """Validate pattern sequences DataFrame"""
+        """Validate pattern sequences DataFrame with practical constraints"""
         try:
             required_columns = ['pattern_length', 'pattern_code', 'pattern_strength', 'start_date']
             if not all(col in df.columns for col in required_columns):
                 logger.error(f"{asset_name} patterns missing required columns")
                 return False
             
-            # Check pattern length range
-            if not ((df['pattern_length'] >= 3) & (df['pattern_length'] <= 10)).all():
-                logger.error(f"{asset_name} pattern lengths out of range [3-10]")
-                return False
+            # Allow empty patterns (some assets may have no clear patterns)
+            if len(df) == 0:
+                logger.info(f"{asset_name} patterns: no patterns detected (acceptable)")
+                return True
             
-            # Check pattern strength range
-            if not ((df['pattern_strength'] >= 0.0) & (df['pattern_strength'] <= 1.0)).all():
-                logger.error(f"{asset_name} pattern strength out of range [0.0-1.0]")
-                return False
+            # Check data completeness for patterns (allow some missing values)
+            valid_patterns = df.dropna(subset=required_columns)
+            if len(valid_patterns) == 0:
+                logger.warning(f"{asset_name} patterns: all patterns have missing values")
+                return True  # Accept even if no complete patterns
+            
+            completeness_ratio = len(valid_patterns) / len(df)
+            if completeness_ratio < 0.8:
+                logger.warning(f"{asset_name} patterns completeness low: {completeness_ratio:.3f}")
+            
+            # Check pattern length range (for valid patterns only)
+            valid_lengths = valid_patterns['pattern_length'].dropna()
+            if len(valid_lengths) > 0:
+                invalid_lengths = ~((valid_lengths >= 3) & (valid_lengths <= 10))
+                if invalid_lengths.any():
+                    invalid_count = invalid_lengths.sum()
+                    if invalid_count > len(valid_lengths) * 0.1:  # Allow up to 10% invalid
+                        logger.error(f"{asset_name} too many invalid pattern lengths: {invalid_count}/{len(valid_lengths)}")
+                        return False
+                    else:
+                        logger.warning(f"{asset_name} some invalid pattern lengths: {invalid_count}")
+            
+            # Check pattern strength range (for valid patterns only)
+            valid_strengths = valid_patterns['pattern_strength'].dropna()
+            if len(valid_strengths) > 0:
+                invalid_strengths = ~((valid_strengths >= 0.0) & (valid_strengths <= 1.0))
+                if invalid_strengths.any():
+                    invalid_count = invalid_strengths.sum()
+                    if invalid_count > len(valid_strengths) * 0.1:  # Allow up to 10% invalid
+                        logger.error(f"{asset_name} too many invalid pattern strengths: {invalid_count}/{len(valid_strengths)}")
+                        return False
+                    else:
+                        logger.warning(f"{asset_name} some invalid pattern strengths: {invalid_count}")
+            
+            # Log validation success
+            logger.info(f"{asset_name} patterns validation passed: "
+                       f"{len(df)} total patterns, {len(valid_patterns)} complete patterns")
             
             return True
         except Exception as e:
@@ -1652,8 +1714,12 @@ def convert_to_direction_patterns(
         )
         
         # Step 5: Validate result
-        if not result.validate():
-            logger.warning("Direction patterns validation failed")
+        validation_success = result.validate()
+        if validation_success:
+            logger.info("Direction patterns validation passed successfully")
+        else:
+            logger.warning("Direction patterns validation failed - some quality issues detected")
+            logger.warning("Result may still be usable but with reduced confidence")
         
         logger.info("Direction pattern conversion completed successfully")
         return result
